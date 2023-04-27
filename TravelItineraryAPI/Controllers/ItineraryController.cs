@@ -20,44 +20,119 @@ namespace TravelItineraryAPI.Controllers
             _context = context;
         }
 
-        // GET: api/Itinerary
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Itinerary>>> GetItinerary()
+
+        // GET: api/Itinerary/SerraCanca
+        [HttpGet("{UserName}")]
+        public async Task<ActionResult<Response>> GetItinerary(string UserName)
         {
+          var response_body = new Response();
           if (_context.Itinerary == null)
           {
-              return NotFound();
-          }
-            return await _context.Itinerary.ToListAsync();
-        }
-
-        // GET: api/Itinerary/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Itinerary>> GetItinerary(int id)
-        {
-          if (_context.Itinerary == null)
-          {
-              return NotFound();
-          }
-            var itinerary = await _context.Itinerary.FindAsync(id);
-
+                response_body.statusCode = 404;
+                response_body.statusDescription = "Failure: Database table does not exist";
+                return response_body;
+            }
+            var itinerary = await _context.Itinerary.Where(c => c.UserName == UserName).FirstOrDefaultAsync();
             if (itinerary == null)
             {
-                return NotFound();
+                response_body.statusCode = 404;
+                response_body.statusDescription = "Failure: User does not exist";
+                return response_body;
             }
 
-            return itinerary;
+            var attractions = await _context.Attractions.Where(c => c.AttractionsId == itinerary.Location_1 || c.AttractionsId == itinerary.Location_2 || c.AttractionsId == itinerary.Location_3 || c.AttractionsId == itinerary.Location_4).ToListAsync();
+
+
+            response_body.statusCode = 200;
+            response_body.statusDescription = "Success";
+            response_body.data = attractions;
+            
+            return response_body;
         }
 
-        // PUT: api/Itinerary/5
+
+
+        // Patch: api/Itinerary/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutItinerary(int id, Itinerary itinerary)
+        [HttpPatch("addItinerary/{UserName}")]
+        public async Task<ActionResult<Response>> PatchItinerary(string UserName, Attractions attractions)
         {
-            if (id != itinerary.ItineraryId)
+            var response_body = new Response();
+
+            var itinerary = await _context.Itinerary.Where(c => c.UserName == UserName).FirstOrDefaultAsync();
+            if (itinerary == null)
             {
-                return BadRequest();
+                response_body.statusCode = 404;
+                response_body.statusDescription = "Failure: User does not exist";
+                return response_body;
             }
+
+            var temp = await _context.Attractions.Where(c => c.Address == attractions.Address).FirstOrDefaultAsync();
+
+            if(temp == null)
+            {
+                response_body.statusCode = 404;
+                response_body.statusDescription = "Failure: attraction was not found in the database";
+                return response_body;
+            }
+
+            if(itinerary.Location_1 != null)
+            {
+                if(itinerary.Location_1 == temp.AttractionsId)
+                {
+                    response_body.statusCode = 406;
+                    response_body.statusDescription = "Failure: Attraction is already in the itinerary";
+                    return response_body;
+                }
+
+                if(itinerary.Location_2 != null)
+                {
+                    if (itinerary.Location_2 == temp.AttractionsId)
+                    {
+                        response_body.statusCode = 406;
+                        response_body.statusDescription = "Failure: Attraction is already in the itinerary";
+                        return response_body;
+                    }
+                    if (itinerary.Location_3 != null)
+                    {
+                        if (itinerary.Location_3 == temp.AttractionsId)
+                        {
+                            response_body.statusCode = 406;
+                            response_body.statusDescription = "Failure: Attraction is already in the itinerary";
+                            return response_body;
+                        }
+                        if (itinerary.Location_4 != null)
+                        {
+                            if (itinerary.Location_4 == temp.AttractionsId)
+                            {
+                                response_body.statusCode = 406;
+                                response_body.statusDescription = "Failure: Attraction is already in the itinerary";
+                                return response_body;
+                            }
+
+                            response_body.statusCode = 406;
+                            response_body.statusDescription = "Failure: User itinerary is full";
+                            return response_body;
+                        }
+
+                        itinerary.Location_4 = temp.AttractionsId;
+                    }
+                    else
+                    {
+                        itinerary.Location_3 = temp.AttractionsId;
+                    }
+                }
+
+                else
+                {
+                    itinerary.Location_2 = temp.AttractionsId;
+                }
+            }
+            else
+            {
+                itinerary.Location_1 = temp.AttractionsId;
+            }
+
 
             _context.Entry(itinerary).State = EntityState.Modified;
 
@@ -67,57 +142,112 @@ namespace TravelItineraryAPI.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!ItineraryExists(id))
+                if (!ItineraryExists(UserName))
                 {
-                    return NotFound();
+                    response_body.statusCode = 404;
+                    response_body.statusDescription = "Failure: User does not exist";
+                    return response_body;
                 }
                 else
                 {
-                    throw;
+                    response_body.statusCode = itinerary.ItineraryId;
+                    response_body.statusDescription = "unexpected error";
+                    return response_body;
                 }
             }
 
-            return NoContent();
+            response_body.statusCode = 200;
+            response_body.statusDescription = "Success: attraction added to Itinerary";
+            return response_body;
+        }
+
+
+
+
+        // Delete: api/Itinerary/5
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [HttpDelete("ClearItinerary/{UserName}")]
+        public async Task<ActionResult<Response>> DeleteItinerary(string UserName)
+        {
+            var response_body = new Response();
+
+            var itinerary = await _context.Itinerary.Where(c => c.UserName == UserName).FirstOrDefaultAsync();
+            if (itinerary == null)
+            {
+                response_body.statusCode = 404;
+                response_body.statusDescription = "Failure: User does not exist";
+                return response_body;
+            }
+
+            itinerary.Location_1 = null;
+            itinerary.Location_2 = null;
+            itinerary.Location_3 = null;
+            itinerary.Location_4 = null;
+
+            _context.Entry(itinerary).State = EntityState.Modified;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!ItineraryExists(UserName))
+                {
+                    response_body.statusCode = 404;
+                    response_body.statusDescription = "Failure: User does not exist";
+                    return response_body;
+                }
+                else
+                {
+                    response_body.statusCode = itinerary.ItineraryId;
+                    response_body.statusDescription = "unexpected error";
+                    return response_body;
+                }
+            }
+
+            response_body.statusCode = 200;
+            response_body.statusDescription = "Success: Itinerary Cleared";
+            return response_body;
         }
 
         // POST: api/Itinerary
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Itinerary>> PostItinerary(Itinerary itinerary)
+        public async Task<ActionResult<Response>> PostItinerary(Itinerary itinerary)
         {
-          if (_context.Itinerary == null)
-          {
-              return Problem("Entity set 'TravelItineraryAPIDBContext.Itinerary'  is null.");
-          }
+            var response_body = new Response();
+            if (_context.Itinerary == null)
+            {
+                response_body.statusCode = 404;
+                response_body.statusDescription = "Failure: Database table does not exist";
+                return response_body;
+            }
+
+            var users = await _context.Itinerary.Where(c => c.UserName== itinerary.UserName).FirstOrDefaultAsync();
+            if(users != null)
+            {
+                response_body.statusCode = 400;
+                response_body.statusDescription = "Failure: User already exists in the database";
+                return response_body;
+            }
+
+            itinerary.Location_1 = null;
+            itinerary.Location_2 = null;
+            itinerary.Location_3 = null;
+            itinerary.Location_4 = null;
             _context.Itinerary.Add(itinerary);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetItinerary", new { id = itinerary.ItineraryId }, itinerary);
+            response_body.statusCode = 200;
+            response_body.statusDescription = "Success: Entry added to the Itinerary table";
+            return response_body;
         }
 
-        // DELETE: api/Itinerary/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteItinerary(int id)
+
+        private bool ItineraryExists(string UserName)
         {
-            if (_context.Itinerary == null)
-            {
-                return NotFound();
-            }
-            var itinerary = await _context.Itinerary.FindAsync(id);
-            if (itinerary == null)
-            {
-                return NotFound();
-            }
-
-            _context.Itinerary.Remove(itinerary);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool ItineraryExists(int id)
-        {
-            return (_context.Itinerary?.Any(e => e.ItineraryId == id)).GetValueOrDefault();
+            return (_context.Itinerary?.Any(e => e.UserName == UserName)).GetValueOrDefault();
         }
     }
 }
